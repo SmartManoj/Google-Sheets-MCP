@@ -4,7 +4,6 @@ Google Spreadsheet MCP Server
 A Model Context Protocol (MCP) server built with FastMCP for interacting with Google Sheets.
 """
 
-import base64
 import os
 from typing import List, Dict, Any, Optional, Union
 import json
@@ -46,7 +45,7 @@ async def spreadsheet_lifespan(server: FastMCP) -> AsyncIterator[SpreadsheetCont
     creds = None
 
     if CREDENTIALS_CONFIG:
-        creds = service_account.Credentials.from_service_account_info(json.loads(base64.b64decode(CREDENTIALS_CONFIG)), scopes=SCOPES)
+        creds = service_account.Credentials.from_service_account_info(json.loads(CREDENTIALS_CONFIG), scopes=SCOPES)
     
     # Check for explicit service account authentication first (custom SERVICE_ACCOUNT_PATH)
     if not creds and SERVICE_ACCOUNT_PATH and os.path.exists(SERVICE_ACCOUNT_PATH):

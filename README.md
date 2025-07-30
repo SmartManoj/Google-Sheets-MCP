@@ -208,24 +208,14 @@ The server needs credentials to access Google APIs. Choose one method:
 ### Method C: Direct Credential Injection (Advanced) 🔒
 
 *   **Why?** Useful in environments like Docker, Kubernetes, or CI/CD where managing files is hard, but environment variables are easy/secure. Avoids file system access.
-*   **How?** Instead of providing a *path* to the credentials file, you provide the *content* of the file, encoded in Base64, directly in an environment variable.
+*   **How?** Instead of providing a *path* to the credentials file, you provide the *content* of the file directly in an environment variable.
 *   **Steps:**
     1.  **Get your credentials JSON file** (either Service Account key or OAuth Client ID file). Let's call it `your_credentials.json`.
-    2.  **Generate the Base64 string:**
-        *   **(Linux/macOS):** `base64 -w 0 your_credentials.json`
-        *   **(Windows PowerShell):**
-            ```powershell
-            $filePath = "C:\path\to\your_credentials.json"; # Use actual path
-            $bytes = [System.IO.File]::ReadAllBytes($filePath);
-            $base64 = [System.Convert]::ToBase64String($bytes);
-            $base64 # Copy this output
-            ```
-        *   **(Caution):** Avoid pasting sensitive credentials into untrusted online encoders.
-    3.  **Set the Environment Variable:**
-        *   `CREDENTIALS_CONFIG`: Set this variable to the **full Base64 string** you just generated.
+    2.  **Set the Environment Variable:**
+        *   `CREDENTIALS_CONFIG`: Set this variable to the **full JSON content** of the credentials file.
             ```bash
-            # Example (Linux/macOS) - Use the actual string generated
-            export CREDENTIALS_CONFIG="ewogICJ0eXBlIjogInNlcnZpY2VfYWNjb..."
+            # Example (Linux/macOS) - Use the actual JSON content
+            export CREDENTIALS_CONFIG='{"type": "service_account", "project_id": "..."}'
             ```
 
 ### Method D: Application Default Credentials (ADC) 🌐
@@ -248,7 +238,7 @@ The server needs credentials to access Google APIs. Choose one method:
 
 The server checks for credentials in this order:
 
-1.  `CREDENTIALS_CONFIG` (Base64 content)
+1.  `CREDENTIALS_CONFIG` (JSON content)
 2.  `SERVICE_ACCOUNT_PATH` (Path to Service Account JSON)
 3.  `CREDENTIALS_PATH` (Path to OAuth JSON) - triggers interactive flow if token is missing/expired
 4.  **Application Default Credentials (ADC)** - automatic fallback
@@ -262,7 +252,7 @@ The server checks for credentials in this order:
 | `DRIVE_FOLDER_ID`      | Service Account             | ID of the Google Drive folder shared with the Service Account.  | -                |
 | `CREDENTIALS_PATH`     | OAuth 2.0                   | Path to the OAuth 2.0 Client ID JSON file.                    | `credentials.json` |
 | `TOKEN_PATH`           | OAuth 2.0                   | Path to store the generated OAuth token.                        | `token.json`     |
-| `CREDENTIALS_CONFIG`   | Service Account / OAuth 2.0 | Base64 encoded JSON string of credentials content.              | -                |
+| `CREDENTIALS_CONFIG`   | Service Account / OAuth 2.0 | JSON string of credentials content.              | -                |
 
 ---
 
@@ -374,7 +364,7 @@ Add the server config to `claude_desktop_config.json` under `mcpServers`. Choose
   }
 }
 ```
-*Note: Paste the full Base64 string for CREDENTIALS_CONFIG. DRIVE_FOLDER_ID is still needed for Service Account folder context.*
+*Note: Paste the full JSON content for CREDENTIALS_CONFIG. DRIVE_FOLDER_ID is still needed for Service Account folder context.*
 
 **🍎 macOS Note:** If you get a `spawn uvx ENOENT` error, replace `"command": "uvx"` with `"command": "/Users/yourusername/.local/bin/uvx"` (replace `yourusername` with your actual username).
 </details>
