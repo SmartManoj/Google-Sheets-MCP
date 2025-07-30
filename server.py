@@ -142,6 +142,26 @@ def ensure_authenticated(ctx: Context) -> SpreadsheetContext:
     return lifespan_context
 
 
+def get_spreadsheet_id(spreadsheet_id: Optional[str] = None) -> str:
+    """
+    Get spreadsheet_id from parameter or environment variable.
+    
+    Args:
+        spreadsheet_id: The spreadsheet ID parameter
+        
+    Returns:
+        The spreadsheet ID from parameter or environment variable
+        
+    Raises:
+        ValueError: If no spreadsheet_id is provided and DEFAULT_SPREADSHEET_ID is not set
+    """
+    if spreadsheet_id is None:
+        spreadsheet_id = os.environ.get('DEFAULT_SPREADSHEET_ID', '')
+        if not spreadsheet_id:
+            raise ValueError("spreadsheet_id is required. Either provide it as a parameter or set DEFAULT_SPREADSHEET_ID environment variable.")
+    return spreadsheet_id
+
+
 # Initialize the MCP server with lifespan management
 mcp = FastMCP("Google Spreadsheet", 
               dependencies=["google-auth", "google-auth-oauthlib", "google-api-python-client"],
@@ -149,8 +169,8 @@ mcp = FastMCP("Google Spreadsheet",
 
 
 @mcp.tool()
-def get_sheet_data(spreadsheet_id: str, 
-                   sheet: str,
+def get_sheet_data(sheet: str,
+                   spreadsheet_id: Optional[str] = None, 
                    range: Optional[str] = None,
                    ctx: Context = None) -> Dict[str, Any]:
     """
@@ -164,6 +184,7 @@ def get_sheet_data(spreadsheet_id: str,
     Returns:
         Grid data structure with full metadata from Google Sheets API
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -184,21 +205,22 @@ def get_sheet_data(spreadsheet_id: str,
     return result
 
 @mcp.tool()
-def get_sheet_formulas(spreadsheet_id: str,
-                       sheet: str,
+def get_sheet_formulas(sheet: str,
+                       spreadsheet_id: Optional[str] = None,
                        range: Optional[str] = None,
                        ctx: Context = None) -> List[List[Any]]:
     """
     Get formulas from a specific sheet in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         sheet: The name of the sheet
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         range: Optional cell range in A1 notation (e.g., 'A1:C10'). If not provided, gets all formulas from the sheet.
     
     Returns:
         A 2D array of the sheet formulas.
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -220,23 +242,24 @@ def get_sheet_formulas(spreadsheet_id: str,
     return formulas
 
 @mcp.tool()
-def update_cells(spreadsheet_id: str,
-                sheet: str,
+def update_cells(sheet: str,
                 range: str,
                 data: List[List[Any]],
+                spreadsheet_id: Optional[str] = None,
                 ctx: Context = None) -> Dict[str, Any]:
     """
     Update cells in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         sheet: The name of the sheet
         range: Cell range in A1 notation (e.g., 'A1:C10')
         data: 2D array of values to update
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
     
     Returns:
         Result of the update operation
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -260,23 +283,24 @@ def update_cells(spreadsheet_id: str,
 
 
 @mcp.tool()
-def batch_update_cells(spreadsheet_id: str,
-                       sheet: str,
+def batch_update_cells(sheet: str,
                        ranges: Dict[str, List[List[Any]]],
+                       spreadsheet_id: Optional[str] = None,
                        ctx: Context = None) -> Dict[str, Any]:
     """
     Batch update multiple ranges in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         sheet: The name of the sheet
         ranges: Dictionary mapping range strings to 2D arrays of values
                e.g., {'A1:B2': [[1, 2], [3, 4]], 'D1:E2': [['a', 'b'], ['c', 'd']]}
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
     
     Returns:
         Result of the batch update operation
     """
     lifespan_context = ensure_authenticated(ctx)
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     sheets_service = lifespan_context.sheets_service
     
     # Prepare the batch update request
@@ -303,23 +327,24 @@ def batch_update_cells(spreadsheet_id: str,
 
 
 @mcp.tool()
-def add_rows(spreadsheet_id: str,
-             sheet: str,
+def add_rows(sheet: str,
              count: int,
+             spreadsheet_id: Optional[str] = None,
              start_row: Optional[int] = None,
              ctx: Context = None) -> Dict[str, Any]:
     """
     Add rows to a sheet in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         sheet: The name of the sheet
         count: Number of rows to add
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         start_row: 0-based row index to start adding. If not provided, adds at the beginning.
     
     Returns:
         Result of the operation
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -362,21 +387,22 @@ def add_rows(spreadsheet_id: str,
 
 
 @mcp.tool()
-def append_rows(spreadsheet_id: str,
-                sheet: str,
+def append_rows(sheet: str,
                 data: List[List[Any]],
+                spreadsheet_id: Optional[str] = None,
                 ctx: Context = None) -> Dict[str, Any]:
     """
     Append rows to the end of a sheet in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         sheet: The name of the sheet
         data: 2D array of values to append as new rows
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
     
     Returns:
         Result of the append operation
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -401,23 +427,24 @@ def append_rows(spreadsheet_id: str,
 
 
 @mcp.tool()
-def add_columns(spreadsheet_id: str,
-                sheet: str,
+def add_columns(sheet: str,
                 count: int,
+                spreadsheet_id: Optional[str] = None,
                 start_column: Optional[int] = None,
                 ctx: Context = None) -> Dict[str, Any]:
     """
     Add columns to a sheet in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         sheet: The name of the sheet
         count: Number of columns to add
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
         start_column: 0-based column index to start adding. If not provided, adds at the beginning.
     
     Returns:
         Result of the operation
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -460,7 +487,7 @@ def add_columns(spreadsheet_id: str,
 
 
 @mcp.tool()
-def list_sheets(spreadsheet_id: str, ctx: Context = None) -> List[str]:
+def list_sheets(spreadsheet_id: Optional[str] = None, ctx: Context = None) -> List[str]:
     """
     List all sheets in a Google Spreadsheet.
     
@@ -470,6 +497,7 @@ def list_sheets(spreadsheet_id: str, ctx: Context = None) -> List[str]:
     Returns:
         List of sheet names
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -757,7 +785,7 @@ def get_spreadsheet_info(spreadsheet_id: str) -> str:
     Get basic information about a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet
+        spreadsheet_id: The ID of the spreadsheet (from URL parameter)
     
     Returns:
         JSON string with spreadsheet information
@@ -860,19 +888,20 @@ def create_spreadsheet(title: str, ctx: Context = None) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def create_sheet(spreadsheet_id: str, 
-                title: str, 
+def create_sheet(title: str,
+                spreadsheet_id: Optional[str] = None, 
                 ctx: Context = None) -> Dict[str, Any]:
     """
     Create a new sheet tab in an existing Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet
         title: The title for the new sheet
+        spreadsheet_id: The ID of the spreadsheet
     
     Returns:
         Information about the newly created sheet
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -942,27 +971,28 @@ def list_spreadsheets(ctx: Context = None) -> List[Dict[str, str]]:
 
 
 @mcp.tool()
-def share_spreadsheet(spreadsheet_id: str, 
-                      recipients: List[Dict[str, str]],
+def share_spreadsheet(recipients: List[Dict[str, str]],
+                      spreadsheet_id: Optional[str] = None,
                       send_notification: bool = True,
                       ctx: Context = None) -> Dict[str, List[Dict[str, Any]]]:
     """
     Share a Google Spreadsheet with multiple users via email, assigning specific roles.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet to share.
         recipients: A list of dictionaries, each containing 'email_address' and 'role'.
                     The role should be one of: 'reader', 'commenter', 'writer'.
                     Example: [
                         {'email_address': 'user1@example.com', 'role': 'writer'},
                         {'email_address': 'user2@example.com', 'role': 'reader'}
                     ]
+        spreadsheet_id: The ID of the spreadsheet to share
         send_notification: Whether to send a notification email to the users. Defaults to True.
 
     Returns:
         A dictionary containing lists of 'successes' and 'failures'. 
         Each item in the lists includes the email address and the outcome.
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     drive_service = lifespan_context.drive_service
     successes = []
@@ -1022,19 +1052,20 @@ def share_spreadsheet(spreadsheet_id: str,
 
 
 @mcp.tool()
-def delete_sheet(spreadsheet_id: str,
-                 sheet: str,
+def delete_sheet(sheet: str,
+                 spreadsheet_id: Optional[str] = None,
                  ctx: Context = None) -> Dict[str, Any]:
     """
     Delete a sheet from a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet
         sheet: The name of the sheet to delete
+        spreadsheet_id: The ID of the spreadsheet
     
     Returns:
         Result of the operation
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -1071,19 +1102,20 @@ def delete_sheet(spreadsheet_id: str,
 
 
 @mcp.tool()
-def get_sheet_properties(spreadsheet_id: str,
-                        sheet: str,
+def get_sheet_properties(sheet: str,
+                        spreadsheet_id: Optional[str] = None,
                         ctx: Context = None) -> Dict[str, Any]:
     """
     Get properties of a specific sheet in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet
         sheet: The name of the sheet
+        spreadsheet_id: The ID of the spreadsheet
     
     Returns:
         Sheet properties including grid dimensions, formatting, etc.
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     
@@ -1103,21 +1135,22 @@ def get_sheet_properties(spreadsheet_id: str,
 
 
 @mcp.tool()
-def clear_sheet_data(spreadsheet_id: str,
-                     sheet: str,
+def clear_sheet_data(sheet: str,
+                     spreadsheet_id: Optional[str] = None,
                      range: Optional[str] = None,
                      ctx: Context = None) -> Dict[str, Any]:
     """
     Clear data from a range in a Google Spreadsheet.
     
     Args:
-        spreadsheet_id: The ID of the spreadsheet
         sheet: The name of the sheet
+        spreadsheet_id: The ID of the spreadsheet
         range: Optional cell range in A1 notation (e.g., 'A1:C10'). If not provided, clears the entire sheet.
     
     Returns:
         Result of the clear operation
     """
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_id)
     lifespan_context = ensure_authenticated(ctx)
     sheets_service = lifespan_context.sheets_service
     

@@ -9,7 +9,8 @@ startCommand:
       command: "python",
       args: ["server.py"],
       env: {
-        CREDENTIALS_CONFIG: config.credentialsConfig
+        CREDENTIALS_CONFIG: config.credentialsConfig,
+        DEFAULT_SPREADSHEET_ID: config.defaultSpreadsheetId
       }
     })
   configSchema:
@@ -21,4 +22,6 @@ startCommand:
       credentialsConfig:
           type: string
           description: JSON string of credentials content.
-    
+      defaultSpreadsheetId:
+          type: string
+          description: Default spreadsheet ID.
