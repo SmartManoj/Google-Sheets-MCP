@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
 # MCP imports
-from mcp.server.fastmcp import FastMCP, Context
+from fastmcp import FastMCP, Context
 
 # Google API imports
 from google.oauth2.credentials import Credentials
@@ -33,15 +33,17 @@ DRIVE_FOLDER_ID = os.environ.get('DRIVE_FOLDER_ID', '')  # Working directory in 
 @dataclass
 class SpreadsheetContext:
     """Context for Google Spreadsheet service"""
-    sheets_service: Any
-    drive_service: Any
+    sheets_service: Optional[Any] = None
+    drive_service: Optional[Any] = None
     folder_id: Optional[str] = None
+    _authenticated: bool = False
 
 
-@asynccontextmanager
-async def spreadsheet_lifespan(server: FastMCP) -> AsyncIterator[SpreadsheetContext]:
-    """Manage Google Spreadsheet API connection lifecycle"""
-    # Authenticate and build the service
+def authenticate_google_services() -> tuple[Any, Any]:
+    """
+    Authenticate with Google APIs using available credentials.
+    Returns (sheets_service, drive_service) or raises Exception if all auth methods fail.
+    """
     creds = None
 
     if CREDENTIALS_CONFIG:
@@ -103,16 +105,41 @@ async def spreadsheet_lifespan(server: FastMCP) -> AsyncIterator[SpreadsheetCont
     sheets_service = build('sheets', 'v4', credentials=creds)
     drive_service = build('drive', 'v3', credentials=creds)
     
-    try:
-        # Provide the service in the context
-        yield SpreadsheetContext(
-            sheets_service=sheets_service,
-            drive_service=drive_service,
-            folder_id=DRIVE_FOLDER_ID if DRIVE_FOLDER_ID else None
-        )
-    finally:
-        # No explicit cleanup needed for Google APIs
-        pass
+    return sheets_service, drive_service
+
+
+@asynccontextmanager
+async def spreadsheet_lifespan(server: FastMCP) -> AsyncIterator[SpreadsheetContext]:
+    """Manage Google Spreadsheet API connection lifecycle"""
+    # Initialize context without authentication - will authenticate lazily when needed
+    context = SpreadsheetContext(
+        sheets_service=None,
+        drive_service=None,
+        folder_id=DRIVE_FOLDER_ID if DRIVE_FOLDER_ID else None,
+        _authenticated=False
+    )
+    
+    yield context
+    
+
+
+def ensure_authenticated(ctx: Context) -> SpreadsheetContext:
+    """
+    Ensure the context is authenticated. If not, authenticate and update the context.
+    This enables lazy authentication - only authenticate when tools are actually called.
+    """
+    lifespan_context = ctx.request_context.lifespan_context
+    
+    if not lifespan_context._authenticated:
+        try:
+            sheets_service, drive_service = authenticate_google_services()
+            lifespan_context.sheets_service = sheets_service
+            lifespan_context.drive_service = drive_service
+            lifespan_context._authenticated = True
+        except Exception as e:
+            raise Exception(f"Authentication failed: {e}")
+    
+    return lifespan_context
 
 
 # Initialize the MCP server with lifespan management
@@ -137,7 +164,8 @@ def get_sheet_data(spreadsheet_id: str,
     Returns:
         Grid data structure with full metadata from Google Sheets API
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Construct the range - keep original API behavior
     if range:
@@ -171,7 +199,8 @@ def get_sheet_formulas(spreadsheet_id: str,
     Returns:
         A 2D array of the sheet formulas.
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Construct the range
     if range:
@@ -208,7 +237,8 @@ def update_cells(spreadsheet_id: str,
     Returns:
         Result of the update operation
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Construct the range
     full_range = f"{sheet}!{range}"
@@ -246,7 +276,8 @@ def batch_update_cells(spreadsheet_id: str,
     Returns:
         Result of the batch update operation
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Prepare the batch update request
     data = []
@@ -289,7 +320,8 @@ def add_rows(spreadsheet_id: str,
     Returns:
         Result of the operation
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Get sheet ID
     spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
@@ -330,6 +362,45 @@ def add_rows(spreadsheet_id: str,
 
 
 @mcp.tool()
+def append_rows(spreadsheet_id: str,
+                sheet: str,
+                data: List[List[Any]],
+                ctx: Context = None) -> Dict[str, Any]:
+    """
+    Append rows to the end of a sheet in a Google Spreadsheet.
+    
+    Args:
+        spreadsheet_id: The ID of the spreadsheet (found in the URL)
+        sheet: The name of the sheet
+        data: 2D array of values to append as new rows
+    
+    Returns:
+        Result of the append operation
+    """
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
+    
+    # Construct the range for appending (append to the end)
+    full_range = f"{sheet}!A:A"
+    
+    # Prepare the value range object
+    value_range_body = {
+        'values': data
+    }
+    
+    # Call the Sheets API to append values
+    result = sheets_service.spreadsheets().values().append(
+        spreadsheetId=spreadsheet_id,
+        range=full_range,
+        valueInputOption='USER_ENTERED',
+        insertDataOption='INSERT_ROWS',
+        body=value_range_body
+    ).execute()
+    
+    return result
+
+
+@mcp.tool()
 def add_columns(spreadsheet_id: str,
                 sheet: str,
                 count: int,
@@ -347,7 +418,8 @@ def add_columns(spreadsheet_id: str,
     Returns:
         Result of the operation
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Get sheet ID
     spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
@@ -398,7 +470,8 @@ def list_sheets(spreadsheet_id: str, ctx: Context = None) -> List[str]:
     Returns:
         List of sheet names
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Get spreadsheet metadata
     spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
@@ -427,7 +500,8 @@ def copy_sheet(src_spreadsheet: str,
     Returns:
         Result of the operation
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Get source sheet ID
     src = sheets_service.spreadsheets().get(spreadsheetId=src_spreadsheet).execute()
@@ -499,7 +573,8 @@ def rename_sheet(spreadsheet: str,
     Returns:
         Result of the operation
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Get sheet ID
     spreadsheet_data = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet).execute()
@@ -553,7 +628,8 @@ def get_multiple_sheet_data(queries: List[Dict[str, str]],
         A list of dictionaries, each containing the original query parameters 
         and the fetched 'data' or an 'error'.
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     results = []
     
     for query in queries:
@@ -601,7 +677,8 @@ def get_multiple_spreadsheet_summary(spreadsheet_ids: List[str],
         A list of dictionaries, each representing a spreadsheet summary. 
         Includes spreadsheet title, sheet summaries (title, headers, first rows), or an error.
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     summaries = []
     
     for spreadsheet_id in spreadsheet_ids:
@@ -687,6 +764,17 @@ def get_spreadsheet_info(spreadsheet_id: str) -> str:
     """
     # Access the context through mcp.get_lifespan_context() for resources
     context = mcp.get_lifespan_context()
+    
+    # Ensure authentication for resources
+    if not context._authenticated:
+        try:
+            sheets_service, drive_service = authenticate_google_services()
+            context.sheets_service = sheets_service
+            context.drive_service = drive_service
+            context._authenticated = True
+        except Exception as e:
+            return json.dumps({"error": f"Authentication failed: {e}"}, indent=2)
+    
     sheets_service = context.sheets_service
     
     # Get spreadsheet metadata
@@ -719,9 +807,10 @@ def create_spreadsheet(title: str, ctx: Context = None) -> Dict[str, Any]:
     Returns:
         Information about the newly created spreadsheet including its ID
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
-    drive_service = ctx.request_context.lifespan_context.drive_service
-    folder_id = ctx.request_context.lifespan_context.folder_id
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
+    drive_service = lifespan_context.drive_service
+    folder_id = lifespan_context.folder_id
     
     # Create the spreadsheet using Sheets API
     spreadsheet_body = {
@@ -784,7 +873,8 @@ def create_sheet(spreadsheet_id: str,
     Returns:
         Information about the newly created sheet
     """
-    sheets_service = ctx.request_context.lifespan_context.sheets_service
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
     
     # Define the add sheet request
     request_body = {
@@ -825,8 +915,9 @@ def list_spreadsheets(ctx: Context = None) -> List[Dict[str, str]]:
     Returns:
         List of spreadsheets with their ID and title
     """
-    drive_service = ctx.request_context.lifespan_context.drive_service
-    folder_id = ctx.request_context.lifespan_context.folder_id
+    lifespan_context = ensure_authenticated(ctx)
+    drive_service = lifespan_context.drive_service
+    folder_id = lifespan_context.folder_id
     
     query = "mimeType='application/vnd.google-apps.spreadsheet'"
     
@@ -872,7 +963,8 @@ def share_spreadsheet(spreadsheet_id: str,
         A dictionary containing lists of 'successes' and 'failures'. 
         Each item in the lists includes the email address and the outcome.
     """
-    drive_service = ctx.request_context.lifespan_context.drive_service
+    lifespan_context = ensure_authenticated(ctx)
+    drive_service = lifespan_context.drive_service
     successes = []
     failures = []
     
@@ -928,6 +1020,129 @@ def share_spreadsheet(spreadsheet_id: str,
             
     return {"successes": successes, "failures": failures}
 
+
+@mcp.tool()
+def delete_sheet(spreadsheet_id: str,
+                 sheet: str,
+                 ctx: Context = None) -> Dict[str, Any]:
+    """
+    Delete a sheet from a Google Spreadsheet.
+    
+    Args:
+        spreadsheet_id: The ID of the spreadsheet
+        sheet: The name of the sheet to delete
+    
+    Returns:
+        Result of the operation
+    """
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
+    
+    # Get sheet ID
+    spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    sheet_id = None
+    
+    for s in spreadsheet['sheets']:
+        if s['properties']['title'] == sheet:
+            sheet_id = s['properties']['sheetId']
+            break
+            
+    if sheet_id is None:
+        return {"error": f"Sheet '{sheet}' not found"}
+    
+    # Prepare the delete sheet request
+    request_body = {
+        "requests": [
+            {
+                "deleteSheet": {
+                    "sheetId": sheet_id
+                }
+            }
+        ]
+    }
+    
+    # Execute the request
+    result = sheets_service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet_id,
+        body=request_body
+    ).execute()
+    
+    return result
+
+
+@mcp.tool()
+def get_sheet_properties(spreadsheet_id: str,
+                        sheet: str,
+                        ctx: Context = None) -> Dict[str, Any]:
+    """
+    Get properties of a specific sheet in a Google Spreadsheet.
+    
+    Args:
+        spreadsheet_id: The ID of the spreadsheet
+        sheet: The name of the sheet
+    
+    Returns:
+        Sheet properties including grid dimensions, formatting, etc.
+    """
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
+    
+    # Get spreadsheet metadata
+    spreadsheet = sheets_service.spreadsheets().get(
+        spreadsheetId=spreadsheet_id,
+        ranges=[sheet],
+        fields='sheets(properties,data)'
+    ).execute()
+    
+    # Find the specific sheet
+    for s in spreadsheet.get('sheets', []):
+        if s['properties']['title'] == sheet:
+            return s['properties']
+    
+    return {"error": f"Sheet '{sheet}' not found"}
+
+
+@mcp.tool()
+def clear_sheet_data(spreadsheet_id: str,
+                     sheet: str,
+                     range: Optional[str] = None,
+                     ctx: Context = None) -> Dict[str, Any]:
+    """
+    Clear data from a range in a Google Spreadsheet.
+    
+    Args:
+        spreadsheet_id: The ID of the spreadsheet
+        sheet: The name of the sheet
+        range: Optional cell range in A1 notation (e.g., 'A1:C10'). If not provided, clears the entire sheet.
+    
+    Returns:
+        Result of the clear operation
+    """
+    lifespan_context = ensure_authenticated(ctx)
+    sheets_service = lifespan_context.sheets_service
+    
+    # Construct the range
+    if range:
+        full_range = f"{sheet}!{range}"
+    else:
+        full_range = sheet
+    
+    # Call the Sheets API to clear values
+    result = sheets_service.spreadsheets().values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=full_range,
+        body={}
+    ).execute()
+    
+    return result
+
+
 def main():
     # Run the server
-    mcp.run()
+    if os.getenv('USE_SHTTP'):
+        mcp.run('streamable-http', host='0.0.0.0', port=8000)
+    else:
+        mcp.run()
+
+if __name__ == '__main__':
+    main()

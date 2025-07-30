@@ -123,7 +123,13 @@ This server exposes the following tools for interacting with Google Sheets:
     *   `sheet` (string)
     *   `ranges` (object): Dictionary mapping range strings (A1 notation) to 2D arrays of values `{ "A1:B2": [[1, 2], [3, 4]], "D5": [["Hello"]] }`.
     *   _Returns:_ Batch update result object.
-*   **`add_rows`**: Appends rows to the end of a sheet (after the last row with data).
+*   **`add_rows`**: Adds rows at a specific position in a sheet.
+    *   `spreadsheet_id` (string)
+    *   `sheet` (string)
+    *   `count` (integer): Number of rows to add
+    *   `start_row` (optional integer): 0-based row index to start adding. If not provided, adds at the beginning.
+    *   _Returns:_ Update result object.
+*   **`append_rows`**: Appends rows to the end of a sheet (after the last row with data).
     *   `spreadsheet_id` (string)
     *   `sheet` (string)
     *   `data` (2D array): Rows to append.
@@ -147,9 +153,36 @@ This server exposes the following tools for interacting with Google Sheets:
     *   `recipients` (array of objects): `[{email_address: 'user@example.com', role: 'writer'}, ...]`. Roles: `reader`, `commenter`, `writer`.
     *   `send_notification` (optional boolean, default True): Send email notifications.
     *   _Returns:_ Dictionary with `successes` and `failures` lists.
-*   **`add_columns`**: Adds columns to a sheet. *(Verify parameters if implemented)*
-*   **`copy_sheet`**: Duplicates a sheet within a spreadsheet. *(Verify parameters if implemented)*
-*   **`rename_sheet`**: Renames an existing sheet. *(Verify parameters if implemented)*
+*   **`add_columns`**: Adds columns to a sheet.
+    *   `spreadsheet_id` (string)
+    *   `sheet` (string)
+    *   `count` (integer): Number of columns to add
+    *   `start_column` (optional integer): 0-based column index to start adding. If not provided, adds at the beginning.
+    *   _Returns:_ Update result object.
+*   **`copy_sheet`**: Copies a sheet from one spreadsheet to another.
+    *   `src_spreadsheet` (string): Source spreadsheet ID
+    *   `src_sheet` (string): Source sheet name
+    *   `dst_spreadsheet` (string): Destination spreadsheet ID
+    *   `dst_sheet` (string): Destination sheet name
+    *   _Returns:_ Copy result object.
+*   **`rename_sheet`**: Renames an existing sheet.
+    *   `spreadsheet` (string): Spreadsheet ID
+    *   `sheet` (string): Current sheet name
+    *   `new_name` (string): New sheet name
+    *   _Returns:_ Rename result object.
+*   **`delete_sheet`**: Deletes a sheet from a spreadsheet.
+    *   `spreadsheet_id` (string): Spreadsheet ID
+    *   `sheet` (string): Name of the sheet to delete
+    *   _Returns:_ Delete result object.
+*   **`get_sheet_properties`**: Gets properties of a specific sheet.
+    *   `spreadsheet_id` (string): Spreadsheet ID
+    *   `sheet` (string): Sheet name
+    *   _Returns:_ Sheet properties object.
+*   **`clear_sheet_data`**: Clears data from a range in a sheet.
+    *   `spreadsheet_id` (string): Spreadsheet ID
+    *   `sheet` (string): Sheet name
+    *   `range` (optional string): A1 notation range to clear. If not provided, clears the entire sheet.
+    *   _Returns:_ Clear result object.
 
 **MCP Resources:**
 
@@ -443,6 +476,10 @@ Once connected, try prompts like:
 *   "Append these rows to the 'Log' sheet in spreadsheet `XYZ`: `[['2024-07-31', 'Task A Completed'], ['2024-08-01', 'Task B Started']]`"
 *   "Get a summary of the spreadsheets 'Sales Data' and 'Inventory Count'."
 *   "Share the 'Team Vacation Schedule' spreadsheet with `team@example.com` as a reader and `manager@example.com` as a writer. Don't send notifications."
+*   "Add 5 rows at the beginning of Sheet1 in my spreadsheet."
+*   "Delete the 'Old Data' sheet from my spreadsheet."
+*   "Clear all data from range A1:C10 in Sheet1."
+*   "Get the properties of Sheet1 to see its dimensions and formatting."
 
 ---
 
