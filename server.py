@@ -21,6 +21,9 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import google.auth
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Constants
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
@@ -165,7 +168,7 @@ def get_spreadsheet_id(spreadsheet_id: Optional[str] = None) -> str:
 # Initialize the MCP server with lifespan management
 mcp = FastMCP("Google Spreadsheet", 
               dependencies=["google-auth", "google-auth-oauthlib", "google-api-python-client"],
-              lifespan=spreadsheet_lifespan)
+              lifespan=spreadsheet_lifespan, stateless_http=True)
 
 
 @mcp.tool()
@@ -1173,7 +1176,7 @@ def clear_sheet_data(sheet: str,
 def main():
     # Run the server
     if os.getenv('USE_SHTTP'):
-        mcp.run('streamable-http', host='0.0.0.0', port=8000)
+        mcp.run('streamable-http', host='0.0.0.0', port=int(os.getenv('PORT')))
     else:
         mcp.run()
 

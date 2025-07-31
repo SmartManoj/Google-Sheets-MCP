@@ -2,5 +2,5 @@
 FROM python:3.13-slim
 WORKDIR /app
 COPY . .
-RUN pip install mcp google-auth google-auth-oauthlib google-api-python-client fastmcp
+RUN pip install mcp google-auth google-auth-oauthlib google-api-python-client fastmcp python-dotenv
 CMD ["python", "server.py"]
